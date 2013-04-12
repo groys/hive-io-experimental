@@ -27,6 +27,9 @@ import java.io.IOException;
 public class SampleInputSplit extends InputSplit implements Writable {
   private int num;
 
+  public SampleInputSplit() {
+  }
+
   public SampleInputSplit(int num) {
     this.num = num;
   }

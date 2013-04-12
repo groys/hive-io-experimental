@@ -17,13 +17,19 @@
  */
 package com.facebook.giraph.hive.mapreduce;
 
+import com.facebook.giraph.hive.record.HiveWritableRecord;
+import com.google.common.collect.Lists;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.util.Tool;
 import org.apache.log4j.Logger;
 
-import com.facebook.giraph.hive.record.HiveWritableRecord;
+import java.io.File;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
 
 /*
   CREATE TABLE hive_io_test (
@@ -39,7 +45,10 @@ public class WritingTool extends Configured implements Tool {
 
   @Override
   public int run(String[] args) throws Exception {
-    Job job = new Job(getConf(), "hive-io-writing");
+    Configuration conf = getConf();
+    adjustConfigurationForHive(conf);
+    conf.set("mapred.fairscheduler.pool", "di.nonsla");
+    Job job = new Job(conf, "hive-io-writing");
     if (job.getJar() == null) {
       job.setJarByClass(getClass());
     }
@@ -54,4 +63,71 @@ public class WritingTool extends Configured implements Tool {
     job.submit();
     return job.waitForCompletion(true) ? 0 : 1;
   }
+
+  /**
+  * set hive configuration
+  */
+  private void adjustConfigurationForHive(Configuration conf) {
+    // when output partitions are used, workers register them to the
+    // metastore at cleanup stage, and on HiveConf's initialization, it
+    // looks for hive-site.xml.
+    addToStringCollection(conf, "tmpfiles",
+      conf.getClassLoader().getResource("hive-site.xml").toString());
+
+    // Or, more effectively, we can provide all the jars client needed to
+    // the workers as well
+    String[] hadoopJars = System.getenv("HADOOP_CLASSPATH").split(
+        File.pathSeparator);
+    List<String> hadoopJarURLs = Lists.newArrayList();
+    for (String jarPath : hadoopJars) {
+      File file = new File(jarPath);
+      if (file.exists() && file.isFile()) {
+        String jarURL = file.toURI().toString();
+        hadoopJarURLs.add(jarURL);
+      }
+    }
+    addToStringCollection(conf, "tmpjars", hadoopJarURLs);
+  }
+
+  /**
+  * add string to collection
+  * @param conf Configuration
+  * @param name name to add
+  * @param values values for collection
+  */
+  private static void addToStringCollection(Configuration conf, String name,
+                                              String... values) {
+    addToStringCollection(conf, name, Arrays.asList(values));
+  }
+  /**
+  * add string to collection
+  * @param conf Configuration
+  * @param name to add
+  * @param values values for collection
+  */
+  private static void addToStringCollection(
+          Configuration conf, String name, Collection<? extends String> values) {
+    Collection<String> tmpfiles = conf.getStringCollection(name);
+    tmpfiles.addAll(values);
+    conf.setStrings(name, tmpfiles.toArray(new String[tmpfiles.size()]));
+  }
+//  @Override
+//  public int run(String[] args) throws Exception {
+//    RunningJob runningJob = JobClient.runJob(setupConf());
+//    runningJob.waitForCompletion();
+//    return 0;
+//  }
+//
+//  public JobConf setupConf() throws Exception {
+//    JobConf job = new JobConf(getConf(), getClass());
+//    job.setMapperClass((Class<? extends Mapper>) SampleMapper.class);
+//    job.setMapOutputKeyClass(IntWritable.class);
+//    job.setMapOutputValueClass(NullWritable.class);
+//    job.setNumReduceTasks(0);
+//    job.setOutputFormat((Class<? extends OutputFormat>) SampleOutputFormat.class);
+//    job.setInputFormat((Class<? extends InputFormat>) SampleInputFormat.class);
+//
+//    return job;
+//
+//  }
 }
