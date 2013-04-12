@@ -48,6 +48,7 @@ public class WritingTool extends Configured implements Tool {
     Configuration conf = getConf();
     adjustConfigurationForHive(conf);
     conf.set("mapred.fairscheduler.pool", "di.nonsla");
+    conf.setInt("mapred.map.max.attempts", 1);
     Job job = new Job(conf, "hive-io-writing");
     if (job.getJar() == null) {
       job.setJarByClass(getClass());
